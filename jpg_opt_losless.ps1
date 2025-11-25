@@ -160,10 +160,20 @@ function Optimize-File {
         
         $OriginalSize = $File.Length
         
-        # Build jpegtran command
-        $Arguments = "-outfile `"$OutputFile`" -copy none -optimize `"$OriginalFile`""
+        # Build jpegtran command using System.Diagnostics.Process
+        $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $processInfo.FileName = $MozJpegPath
+        $processInfo.Arguments = "-outfile `"$OutputFile`" -copy none -optimize `"$OriginalFile`""
+        $processInfo.RedirectStandardOutput = $true
+        $processInfo.RedirectStandardError = $true
+        $processInfo.UseShellExecute = $false
+        $processInfo.CreateNoWindow = $true
         
-        $process = Start-Process -FilePath $MozJpegPath -ArgumentList $Arguments -Wait -PassThru -NoNewWindow
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $processInfo
+        $process.Start() | Out-Null
+        $process.WaitForExit()
+        
         if ($process.ExitCode -eq 0 -and (Test-Path $OutputFile)) { 
             $NewSize = (Get-Item $OutputFile).Length
             
@@ -245,10 +255,20 @@ if ($UseParallel) {
                 
                 $OriginalSize = $File.Length
                 
-                # Build jpegtran command
-                $Arguments = "-outfile `"$OutputFile`" -copy none -optimize `"$OriginalFile`""
+                # Build jpegtran command using System.Diagnostics.Process
+                $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+                $processInfo.FileName = $MozJpegPath
+                $processInfo.Arguments = "-outfile `"$OutputFile`" -copy none -optimize `"$OriginalFile`""
+                $processInfo.RedirectStandardOutput = $true
+                $processInfo.RedirectStandardError = $true
+                $processInfo.UseShellExecute = $false
+                $processInfo.CreateNoWindow = $true
                 
-                $process = Start-Process -FilePath $MozJpegPath -ArgumentList $Arguments -Wait -PassThru -NoNewWindow
+                $process = New-Object System.Diagnostics.Process
+                $process.StartInfo = $processInfo
+                $process.Start() | Out-Null
+                $process.WaitForExit()
+                
                 if ($process.ExitCode -eq 0 -and (Test-Path $OutputFile)) { 
                     $NewSize = (Get-Item $OutputFile).Length
                     

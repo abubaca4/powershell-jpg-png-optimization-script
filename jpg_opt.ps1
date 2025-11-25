@@ -201,7 +201,16 @@ function Optimize-File {
                 # Build full command line
                 $Arguments = "-outfile `"$TempOutput`" $Params `"$OriginalFile`""
                 
-                $process = Start-Process -FilePath $MozJpegPath -ArgumentList $Arguments -Wait -PassThru -NoNewWindow
+                $process = New-Object System.Diagnostics.Process
+                $process.StartInfo.FileName = $MozJpegPath
+                $process.StartInfo.Arguments = "-outfile `"$TempOutput`" $Params `"$OriginalFile`""
+                $process.StartInfo.UseShellExecute = $false
+                $process.StartInfo.CreateNoWindow = $true
+                $process.StartInfo.RedirectStandardOutput = $true
+                $process.StartInfo.RedirectStandardError = $true
+                $process.Start() | Out-Null
+                $process.WaitForExit()
+                
                 if ($process.ExitCode -eq 0 -and (Test-Path $TempOutput)) { 
                     $TempSize = (Get-Item $TempOutput).Length
                     
@@ -332,7 +341,16 @@ if ($UseParallel) {
                         # Build full command line
                         $Arguments = "-outfile `"$TempOutput`" $Params `"$OriginalFile`""
                         
-                        $process = Start-Process -FilePath $MozJpegPath -ArgumentList $Arguments -Wait -PassThru -NoNewWindow
+                        $process = New-Object System.Diagnostics.Process
+                        $process.StartInfo.FileName = $MozJpegPath
+                        $process.StartInfo.Arguments = "-outfile `"$TempOutput`" $Params `"$OriginalFile`""
+                        $process.StartInfo.UseShellExecute = $false
+                        $process.StartInfo.CreateNoWindow = $true
+                        $process.StartInfo.RedirectStandardOutput = $true
+                        $process.StartInfo.RedirectStandardError = $true
+                        $process.Start() | Out-Null
+                        $process.WaitForExit()
+                        
                         if ($process.ExitCode -eq 0 -and (Test-Path $TempOutput)) { 
                             $TempSize = (Get-Item $TempOutput).Length
                             
