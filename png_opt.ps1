@@ -8,7 +8,6 @@ param(
 
 # Detect system language
 $SystemLanguage = (Get-Culture).TwoLetterISOLanguageName
-$UseRussian = $SystemLanguage -eq "ru"
 
 # Messages in both languages
 $Messages = @{
