@@ -6,17 +6,96 @@ param(
     [string]$OutputPath
 )
 
-# Настройки
+# Detect system language
+$SystemLanguage = (Get-Culture).TwoLetterISOLanguageName
+$UseRussian = $SystemLanguage -eq "ru"
+
+# Messages in both languages
+$Messages = @{
+    "InputPathNotSpecified" = @{
+        "ru" = "Не указан входной путь"
+        "en" = "Input path not specified"
+    }
+    "InputPathNotFound" = @{
+        "ru" = "Входной путь не существует: {0}"
+        "en" = "Input path does not exist: {0}"
+    }
+    "OxipngNotFound" = @{
+        "ru" = "oxipng не найден по пути: {0}"
+        "en" = "oxipng not found at path: {0}"
+    }
+    "Start" = @{
+        "ru" = "НАЧАЛО: {0}"
+        "en" = "START: {0}"
+    }
+    "SizeHeader" = @{
+        "ru" = "Размер в байтах:"
+        "en" = "Size in bytes:"
+    }
+    "SizeRowHeader" = @{
+        "ru" = "исх.    сейчас  % от исх.    имя и путь (секунд обработки)"
+        "en" = "orig.   current % of orig.   name and path (processing seconds)"
+    }
+    "NotCompressed" = @{
+        "ru" = "не сжался"
+        "en" = "not compressed"
+    }
+    "ErrorProcessing" = @{
+        "ru" = "ошибка"
+        "en" = "error"
+    }
+    "ErrorDetailed" = @{
+        "ru" = "ОШИБКА: {0} - {1}"
+        "en" = "ERROR: {0} - {1}"
+    }
+    "End" = @{
+        "ru" = "КОНЕЦ: {0}"
+        "en" = "END: {0}"
+    }
+    "ReplacePrompt" = @{
+        "ru" = "Заменить оригинальные PNG/APNG файлы сжатыми версиями? Нажмите Y для ДА или N для НЕТ и нажмите ENTER"
+        "en" = "Replace original PNG/APNG files with compressed versions? Press Y for YES or N for NO and press ENTER"
+    }
+    "DoneReplaced" = @{
+        "ru" = "Готово. Оригинальные файлы были заменены."
+        "en" = "Done. Original files have been replaced."
+    }
+    "DoneNotReplaced" = @{
+        "ru" = "Готово. Оригинальные и сжатые файлы сохранены. Сжатые файлы имеют суффикс .opti"
+        "en" = "Done. Original and compressed files are saved. Compressed files have suffix .opti"
+    }
+    "DoneOutput" = @{
+        "ru" = "Готово. Сжатые файлы сохранены в: {0}"
+        "en" = "Done. Compressed files are saved in: {0}"
+    }
+}
+
+# Helper function to get localized message
+function Get-LocalizedMessage {
+    param([string]$Key, [array]$FormatArgs = @())
+    
+    $messageTemplate = $Messages[$Key][$SystemLanguage]
+    if (-not $messageTemplate) {
+        $messageTemplate = $Messages[$Key]["en"] # Fallback to English
+    }
+    
+    if ($FormatArgs.Count -gt 0) {
+        return $messageTemplate -f $FormatArgs
+    }
+    return $messageTemplate
+}
+
+# Settings
 $OxipngPath = "oxipng\oxipng.exe"
 
-# Проверка аргументов
+# Check arguments
 if (-not $InputPath) {
-    Write-Error "Не указан входной путь"
+    Write-Error (Get-LocalizedMessage "InputPathNotSpecified")
     exit 1
 }
 
 if (-not (Test-Path $InputPath)) {
-    Write-Error "Входной путь не существует: $InputPath"
+    Write-Error (Get-LocalizedMessage "InputPathNotFound" $InputPath)
     exit 1
 }
 
@@ -30,20 +109,20 @@ if (-not $OutputPath) {
     $ConfirmReplace = $false
 }
 
-# Проверка наличия oxipng
+# Check if oxipng exists
 if (-not (Test-Path $OxipngPath)) {
-    Write-Error "oxipng не найден по пути: $OxipngPath"
+    Write-Error (Get-LocalizedMessage "OxipngNotFound" $OxipngPath)
     exit 1
 }
 
-Write-Host "НАЧАЛО: $(Get-Date)"
-Write-Host "Размер в байтах:"
-Write-Host "исх.    сейчас  % от исх.    имя и путь (секунд обработки)"
+Write-Host (Get-LocalizedMessage "Start" (Get-Date))
+Write-Host (Get-LocalizedMessage "SizeHeader")
+Write-Host (Get-LocalizedMessage "SizeRowHeader")
 
-# Получаем все файлы для обработки (только PNG и APNG)
+# Get all files for processing (only PNG and APNG)
 $Files = Get-ChildItem -Path $InputPath -Include *.png, *.apng -Recurse -File
 
-# Функция для обработки одного файла
+# Function to process a single file
 function Optimize-File {
     param($File, $OxipngPath, $OutputPath, $InputPath, $ConfirmReplace)
     
@@ -51,16 +130,16 @@ function Optimize-File {
     $OriginalFile = $File.FullName
 
     try {
-        # Определяем выходное имя файла
+        # Determine output filename
         if ($ConfirmReplace) {
-            # Если выход в ту же папку
+            # If output to the same folder
             $OutputFile = $File.FullName + ".opti" + $File.Extension
         } else {
-            # Если выход в другую папку
+            # If output to a different folder
             $OutputFile = Join-Path $OutputPath ($File.BaseName + ".opti" + $File.Extension)
         }
         
-        # Создаем папку для выходного файла если нужно
+        # Create folder for output file if needed
         $OutputDir = Split-Path $OutputFile -Parent
         if (-not (Test-Path $OutputDir)) {
             New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
@@ -68,8 +147,8 @@ function Optimize-File {
         
         $OriginalSize = $File.Length
         
-        # Формируем команду oxipng
-        $Arguments = "-o max --strip safe -Z -q --out `"$OutputFile`" `"$OriginalFile`""
+        # Build oxipng command
+        $Arguments = "-o max --strip safe -Z --fast -q --out `"$OutputFile`" `"$OriginalFile`""
         
         $process = Start-Process -FilePath $OxipngPath -ArgumentList $Arguments -Wait -PassThru -NoNewWindow
         if ($process.ExitCode -eq 0 -and (Test-Path $OutputFile)) { 
@@ -88,43 +167,43 @@ function Optimize-File {
                     CompressedSize = $NewSize
                 }
             } else {
-                # Если файл не сжался, удаляем выходной файл
+                # If file wasn't compressed, delete output file
                 Remove-Item $OutputFile -Force -ErrorAction SilentlyContinue
-                Write-Host "$OriginalSize`t----`tне сжался`t`t$($File.Name)"
+                Write-Host "$OriginalSize`t----`t$(Get-LocalizedMessage "NotCompressed")`t`t$($File.Name)"
                 return $null
             }
         } else {
-            Write-Host "$OriginalSize`t----`tошибка`t`t$($File.Name)"
+            Write-Host "$OriginalSize`t----`t$(Get-LocalizedMessage "ErrorProcessing")`t`t$($File.Name)"
             return $null
         }
     }
     catch {
-        Write-Host "ОШИБКА: $($File.Name) - $($_.Exception.Message)"
+        Write-Host (Get-LocalizedMessage "ErrorDetailed" $File.Name $_.Exception.Message)
         return $null
     }
 }
 
-# Обрабатываем файлы последовательно
+# Process files sequentially
 $Results = $Files | ForEach-Object {
     Optimize-File -File $_ -OxipngPath $OxipngPath -OutputPath $OutputPath -InputPath $InputPath -ConfirmReplace $ConfirmReplace
 }
 
-Write-Host "КОНЕЦ: $(Get-Date)"
+Write-Host (Get-LocalizedMessage "End" (Get-Date))
 
-# Запрос на замену оригиналов если нужно
+# Prompt for replacing originals if needed
 if ($ConfirmReplace -and $Results -ne $null) {
-    $Response = Read-Host "Заменить оригинальные PNG/APNG файлы сжатыми версиями? Нажмите Y для ДА или N для НЕТ и нажмите ENTER"
+    $Response = Read-Host (Get-LocalizedMessage "ReplacePrompt")
     if ($Response -eq 'Y' -or $Response -eq 'y') {
         foreach ($Result in $Results) {
             if ($Result -ne $null) {
-                # Заменяем оригинал PNG/APNG файла
+                # Replace original PNG/APNG file
                 Move-Item $Result.OutputFile $Result.OriginalFile -Force
             }
         }
-        Write-Host "Готово. Оригинальные файлы были заменены."
+        Write-Host (Get-LocalizedMessage "DoneReplaced")
     } else {
-        Write-Host "Готово. Оригинальные и сжатые файлы сохранены. Сжатые файлы имеют суффикс .opti"
+        Write-Host (Get-LocalizedMessage "DoneNotReplaced")
     }
 } else {
-    Write-Host "Готово. Сжатые файлы сохранены в: $OutputPath"
+    Write-Host (Get-LocalizedMessage "DoneOutput" $OutputPath)
 }

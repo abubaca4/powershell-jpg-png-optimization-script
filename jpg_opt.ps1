@@ -6,28 +6,103 @@ param(
     [string]$OutputPath
 )
 
-# Настройки
+# Detect system language
+$SystemLanguage = (Get-Culture).TwoLetterISOLanguageName
+$UseRussian = $SystemLanguage -eq "ru"
+
+# Messages in both languages
+$Messages = @{
+    "PSVersionWarning" = @{
+        "ru" = "PowerShell версии {0} - параллельная обработка недоступна, используется последовательная обработка"
+        "en" = "PowerShell version {0} - parallel processing unavailable, using sequential processing"
+    }
+    "InputPathNotSpecified" = @{
+        "ru" = "Не указан входной путь"
+        "en" = "Input path not specified"
+    }
+    "InputPathNotFound" = @{
+        "ru" = "Входной путь не существует: {0}"
+        "en" = "Input path does not exist: {0}"
+    }
+    "MozJpegNotFound" = @{
+        "ru" = "mozcjpeg не найден по пути: {0}"
+        "en" = "mozcjpeg not found at path: {0}"
+    }
+    "Start" = @{
+        "ru" = "НАЧАЛО: {0}"
+        "en" = "START: {0}"
+    }
+    "SizeHeader" = @{
+        "ru" = "Размер в байтах:"
+        "en" = "Size in bytes:"
+    }
+    "SizeRowHeader" = @{
+        "ru" = "исх.    сейчас  % от исх.    имя и путь (секунд обработки) параметры"
+        "en" = "orig.   current % of orig.   name and path (processing seconds) parameters"
+    }
+    "Skipped" = @{
+        "ru" = "пропущен"
+        "en" = "skipped"
+    }
+    "Error" = @{
+        "ru" = "ОШИБКА: {0} - {1}"
+        "en" = "ERROR: {0} - {1}"
+    }
+    "ReplacePrompt" = @{
+        "ru" = "Заменить оригинальные jpg или png файлы сжатыми версиями? Нажмите Y для ДА или N для НЕТ и нажмите ENTER"
+        "en" = "Replace original jpg or png files with compressed versions? Press Y for YES or N for NO and press ENTER"
+    }
+    "DoneReplaced" = @{
+        "ru" = "Готово. Оригинальные файлы были заменены."
+        "en" = "Done. Original files have been replaced."
+    }
+    "DoneNotReplaced" = @{
+        "ru" = "Готово. Оригинальные и сжатые файлы сохранены. Сжатые файлы имеют суффикс .opti.jpg"
+        "en" = "Done. Original and compressed files are saved. Compressed files have suffix .opti.jpg"
+    }
+    "DoneOutput" = @{
+        "ru" = "Готово. Сжатые файлы сохранены в: {0}"
+        "en" = "Done. Compressed files are saved in: {0}"
+    }
+}
+
+# Helper function to get localized message
+function Get-LocalizedMessage {
+    param([string]$Key, [array]$FormatArgs = @())
+    
+    $messageTemplate = $Messages[$Key][$SystemLanguage]
+    if (-not $messageTemplate) {
+        $messageTemplate = $Messages[$Key]["en"] # Fallback to English
+    }
+    
+    if ($FormatArgs.Count -gt 0) {
+        return $messageTemplate -f $FormatArgs
+    }
+    return $messageTemplate
+}
+
+# Settings
 $MozJpegPath = "mozjpeg\cjpeg-static.exe"
 $ProcessorCores = (Get-CimInstance Win32_Processor).NumberOfCores
 
-# Проверка версии PowerShell
+# Check PowerShell version
 $PSVersion = $PSVersionTable.PSVersion.Major
 $UseParallel = $PSVersion -ge 7
 
 if ($UseParallel) {
     $ThrottleLimit = $ProcessorCores
 } else {
-    Write-Host "PowerShell версии $PSVersion - параллельная обработка недоступна, используется последовательная обработка"
+    Write-Host (Get-LocalizedMessage "PSVersionWarning" -FormatArgs $PSVersion)
 }
 
-# Проверка аргументов
+# Check arguments
 if (-not $InputPath) {
-    Write-Error "Не указан входной путь"
+    Write-Error (Get-LocalizedMessage "InputPathNotSpecified")
     exit 1
 }
 
 if (-not (Test-Path $InputPath)) {
-    Write-Error "Входной путь не существует: $InputPath"
+    Write-Error (Get-LocalizedMessage "InputPathNotFound" -FormatArgs $InputPath)
     exit 1
 }
 
@@ -41,13 +116,13 @@ if (-not $OutputPath) {
     $ConfirmReplace = $false
 }
 
-# Проверка наличия mozcjpeg
+# Check if mozcjpeg is available
 if (-not (Test-Path $MozJpegPath)) {
-    Write-Error "mozcjpeg не найден по пути: $MozJpegPath"
+    Write-Error (Get-LocalizedMessage "MozJpegNotFound" -FormatArgs $MozJpegPath)
     exit 1
 }
 
-# Наборы параметров для тестирования
+# Parameter sets for testing
 $ParameterSets = @(
     "-dct float -quant-table 1 -nojfif -dc-scan-opt 2",
     "-dct float -quant-table 2 -nojfif -dc-scan-opt 2",
@@ -72,14 +147,14 @@ $ParameterSets = @(
     "-tune-ssim -quant-table 3 -nojfif -dc-scan-opt 2"
 )
 
-Write-Host "НАЧАЛО: $(Get-Date)"
-Write-Host "Размер в байтах:"
-Write-Host "исх.    сейчас  % от исх.    имя и путь (секунд обработки) параметры"
+Write-Host (Get-LocalizedMessage "Start" -FormatArgs (Get-Date))
+Write-Host (Get-LocalizedMessage "SizeHeader")
+Write-Host (Get-LocalizedMessage "SizeRowHeader")
 
-# Получаем все файлы для обработки
+# Get all files for processing
 $Files = Get-ChildItem -Path $InputPath -Include *.jpg, *.jpeg, *.png -Recurse -File
 
-# Функция для обработки одного файла
+# Function to process a single file
 function Optimize-File {
     param($File, $MozJpegPath, $ParameterSets, $OutputPath, $InputPath, $ConfirmReplace)
     
@@ -87,16 +162,16 @@ function Optimize-File {
     $OriginalFile = $File.FullName
 
     try {
-        # Определяем выходное имя файла
+        # Determine output filename
         if ($ConfirmReplace) {
-            # Если выход в ту же папку
+            # If output to the same folder
             if ($File.Extension -eq '.png') {
                 $OutputFile = Join-Path $File.DirectoryName ($File.BaseName + ".opti.jpg")
             } else {
                 $OutputFile = $File.FullName + ".opti.jpg"
             }
         } else {
-            # Если выход в другую папку
+            # If output to a different folder
             if ($InputPath -ne $OutputPath) {
                 $RelativePath = $File.FullName.Substring($InputPath.Length).TrimStart('\', '/')
             }
@@ -108,7 +183,7 @@ function Optimize-File {
             }
         }
         
-        # Создаем папку для выходного файла если нужно
+        # Create folder for output file if needed
         $OutputDir = Split-Path $OutputFile -Parent
         if (-not (Test-Path $OutputDir)) {
             New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
@@ -119,48 +194,48 @@ function Optimize-File {
         $BestParams = ""
         $BestTempFile = $null
         
-        # Перебираем все наборы параметров для этого файла
+        # Iterate through all parameter sets for this file
         foreach ($Params in $ParameterSets) {
             $TempOutput = [System.IO.Path]::GetTempFileName() + ".jpg"
             
             try {
-                # Формируем полную командную строку
+                # Build full command line
                 $Arguments = "-outfile `"$TempOutput`" $Params `"$OriginalFile`""
                 
                 $process = Start-Process -FilePath $MozJpegPath -ArgumentList $Arguments -Wait -PassThru -NoNewWindow
                 if ($process.ExitCode -eq 0 -and (Test-Path $TempOutput)) { 
                     $TempSize = (Get-Item $TempOutput).Length
                     
-                    # Ищем наименьший размер
+                    # Find smallest size
                     if ($TempSize -lt $BestSize) {
                         $BestSize = $TempSize
                         $BestParams = $Params
                         
-                        # Сохраняем путь к лучшему временному файлу
+                        # Save path to best temp file
                         if ($BestTempFile -and (Test-Path $BestTempFile)) {
                             Remove-Item $BestTempFile -Force -ErrorAction SilentlyContinue
                         }
                         $BestTempFile = $TempOutput
                     } else {
-                        # Удаляем временный файл если он не лучший
+                        # Delete temp file if it's not the best
                         Remove-Item $TempOutput -Force -ErrorAction SilentlyContinue
                     }
                 } else {
-                    # Удаляем временный файл если конвертация не удалась
+                    # Delete temp file if conversion failed
                     if (Test-Path $TempOutput) { 
                         Remove-Item $TempOutput -Force -ErrorAction SilentlyContinue 
                     }
                 }
             }
             catch {
-                # Удаляем временный файл при ошибке
+                # Delete temp file on error
                 if (Test-Path $TempOutput) { 
                     Remove-Item $TempOutput -Force -ErrorAction SilentlyContinue 
                 }
             }
         }
         
-        # Копируем лучший результат в выходной файл
+        # Copy best result to output file
         if ($BestTempFile -and (Test-Path $BestTempFile)) {
             Copy-Item $BestTempFile $OutputFile -Force
             Remove-Item $BestTempFile -Force -ErrorAction SilentlyContinue
@@ -179,20 +254,38 @@ function Optimize-File {
                 CompressedSize = $BestSize
             }
         } else {
-            Write-Host "$OriginalSize`t----`tпропущен`t`t$($File.Name)"
+            Write-Host "$OriginalSize`t----`t$(Get-LocalizedMessage "Skipped")`t`t$($File.Name)"
             return $null
         }
     }
     catch {
-        Write-Host "ОШИБКА: $($File.Name) - $($_.Exception.Message)"
+        Write-Host (Get-LocalizedMessage "Error" -FormatArgs $File.Name, $_.Exception.Message)
         return $null
     }
 }
 
-# Обрабатываем файлы в зависимости от версии PowerShell
+# Process files depending on PowerShell version
 if ($UseParallel) {
-    # PowerShell 7+ - используем параллельную обработку
+    # PowerShell 7+ - use parallel processing
     $Results = $Files | ForEach-Object -Parallel {
+        # Recreate localization function inside parallel block
+        function Get-LocalizedMessageParallel {
+            param([string]$Key, [array]$FormatArgs = @())
+            
+            $Messages = $using:Messages
+            $SystemLanguage = $using:SystemLanguage
+            
+            $messageTemplate = $Messages[$Key][$SystemLanguage]
+            if (-not $messageTemplate) {
+                $messageTemplate = $Messages[$Key]["en"] # Fallback to English
+            }
+            
+            if ($FormatArgs.Count -gt 0) {
+                return $messageTemplate -f $FormatArgs
+            }
+            return $messageTemplate
+        }
+
         function Optimize-File {
             param($File, $MozJpegPath, $ParameterSets, $OutputPath, $InputPath, $ConfirmReplace)
             
@@ -200,16 +293,16 @@ if ($UseParallel) {
             $OriginalFile = $File.FullName
 
             try {
-                # Определяем выходное имя файла
+                # Determine output filename
                 if ($ConfirmReplace) {
-                    # Если выход в ту же папку
+                    # If output to the same folder
                     if ($File.Extension -eq '.png') {
                         $OutputFile = Join-Path $File.DirectoryName ($File.BaseName + ".opti.jpg")
                     } else {
                         $OutputFile = $File.FullName + ".opti.jpg"
                     }
                 } else {
-                    # Если выход в другую папку
+                    # If output to a different folder
                     if ($InputPath -ne $OutputPath) {
                         $RelativePath = $File.FullName.Substring($InputPath.Length).TrimStart('\', '/')
                     }
@@ -221,7 +314,7 @@ if ($UseParallel) {
                     }
                 }
                 
-                # Создаем папку для выходного файла если нужно
+                # Create folder for output file if needed
                 $OutputDir = Split-Path $OutputFile -Parent
                 if (-not (Test-Path $OutputDir)) {
                     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
@@ -232,48 +325,48 @@ if ($UseParallel) {
                 $BestParams = ""
                 $BestTempFile = $null
                 
-                # Перебираем все наборы параметров для этого файла
+                # Iterate through all parameter sets for this file
                 foreach ($Params in $ParameterSets) {
                     $TempOutput = [System.IO.Path]::GetTempFileName() + ".jpg"
                     
                     try {
-                        # Формируем полную командную строку
+                        # Build full command line
                         $Arguments = "-outfile `"$TempOutput`" $Params `"$OriginalFile`""
                         
                         $process = Start-Process -FilePath $MozJpegPath -ArgumentList $Arguments -Wait -PassThru -NoNewWindow
                         if ($process.ExitCode -eq 0 -and (Test-Path $TempOutput)) { 
                             $TempSize = (Get-Item $TempOutput).Length
                             
-                            # Ищем наименьший размер
+                            # Find smallest size
                             if ($TempSize -lt $BestSize) {
                                 $BestSize = $TempSize
                                 $BestParams = $Params
                                 
-                                # Сохраняем путь к лучшему временному файлу
+                                # Save path to best temp file
                                 if ($BestTempFile -and (Test-Path $BestTempFile)) {
                                     Remove-Item $BestTempFile -Force -ErrorAction SilentlyContinue
                                 }
                                 $BestTempFile = $TempOutput
                             } else {
-                                # Удаляем временный файл если он не лучший
+                                # Delete temp file if it's not the best
                                 Remove-Item $TempOutput -Force -ErrorAction SilentlyContinue
                             }
                         } else {
-                            # Удаляем временный файл если конвертация не удалась
+                            # Delete temp file if conversion failed
                             if (Test-Path $TempOutput) { 
                                 Remove-Item $TempOutput -Force -ErrorAction SilentlyContinue 
                             }
                         }
                     }
                     catch {
-                        # Удаляем временный файл при ошибке
+                        # Delete temp file on error
                         if (Test-Path $TempOutput) { 
                             Remove-Item $TempOutput -Force -ErrorAction SilentlyContinue 
                         }
                     }
                 }
                 
-                # Копируем лучший результат в выходной файл
+                # Copy best result to output file
                 if ($BestTempFile -and (Test-Path $BestTempFile)) {
                     Copy-Item $BestTempFile $OutputFile -Force
                     Remove-Item $BestTempFile -Force -ErrorAction SilentlyContinue
@@ -292,51 +385,51 @@ if ($UseParallel) {
                         CompressedSize = $BestSize
                     }
                 } else {
-                    Write-Host "$OriginalSize`t----`tпропущен`t`t$($File.Name)"
+                    Write-Host "$OriginalSize`t----`t$(Get-LocalizedMessageParallel "Skipped")`t`t$($File.Name)"
                     return $null
                 }
             }
             catch {
-                Write-Host "ОШИБКА: $($File.Name) - $($_.Exception.Message)"
+                Write-Host (Get-LocalizedMessageParallel "Error" -FormatArgs $File.Name, $_.Exception.Message)
                 return $null
             }
         }
         
-        # Вызываем функцию для текущего файла
+        # Call function for current file
         $result = Optimize-File -File $_ -MozJpegPath $using:MozJpegPath -ParameterSets $using:ParameterSets -OutputPath $using:OutputPath -InputPath $using:InputPath -ConfirmReplace $using:ConfirmReplace
         return $result
     } -ThrottleLimit $ThrottleLimit
 } else {
-    # PowerShell 5 и ниже - используем последовательную обработку
+    # PowerShell 5 and below - use sequential processing
     $Results = $Files | ForEach-Object {
         Optimize-File -File $_ -MozJpegPath $MozJpegPath -ParameterSets $ParameterSets -OutputPath $OutputPath -InputPath $InputPath -ConfirmReplace $ConfirmReplace
     }
 }
 
-Write-Host "КОНЕЦ: $(Get-Date)"
+Write-Host "END: $(Get-Date)"
 
-# Запрос на замену оригиналов если нужно
+# Prompt to replace originals if needed
 if ($ConfirmReplace -and $Results -ne $null) {
-    $Response = Read-Host "Заменить оригинальные jpg или png файлы сжатыми версиями? Нажмите Y для ДА или N для НЕТ и нажмите ENTER"
+    $Response = Read-Host (Get-LocalizedMessage "ReplacePrompt")
     if ($Response -eq 'Y' -or $Response -eq 'y') {
         foreach ($Result in $Results) {
             if ($Result -ne $null) {
                 $OriginalExt = [System.IO.Path]::GetExtension($Result.OriginalFile)
                 if ($OriginalExt -eq '.png') {
-                    # Для PNG удаляем оригинал и переименовываем JPG
+                    # For PNG delete original and rename JPG
                     Remove-Item $Result.OriginalFile -Force -ErrorAction SilentlyContinue
                     $NewName = $Result.OriginalFile -replace '\.png$', '.jpg'
                     Move-Item $Result.OutputFile $NewName -Force
                 } else {
-                    # Для JPG заменяем оригинал
+                    # For JPG replace original
                     Move-Item $Result.OutputFile $Result.OriginalFile -Force
                 }
             }
         }
-        Write-Host "Готово. Оригинальные файлы были заменены."
+        Write-Host (Get-LocalizedMessage "DoneReplaced")
     } else {
-        Write-Host "Готово. Оригинальные и сжатые файлы сохранены. Сжатые файлы имеют суффикс .opti.jpg"
+        Write-Host (Get-LocalizedMessage "DoneNotReplaced")
     }
 } else {
-    Write-Host "Готово. Сжатые файлы сохранены в: $OutputPath"
+    Write-Host (Get-LocalizedMessage "DoneOutput" -FormatArgs $OutputPath)
 }
