@@ -199,7 +199,6 @@ function Optimize-File {
             
             try {
                 # Build full command line and execute directly
-                $Arguments = "-outfile `"$TempOutput`" $Params `"$OriginalFile`""
                 & $MozJpegPath -outfile $TempOutput $Params.Split(' ') $OriginalFile 2>$null 1>$null
                 
                 if ($LASTEXITCODE -eq 0 -and (Test-Path $TempOutput)) { 
@@ -329,9 +328,6 @@ if ($UseParallel) {
                     $TempOutput = [System.IO.Path]::GetTempFileName() + ".jpg"
                     
                     try {
-                        # Build full command line
-                        $Arguments = "-outfile `"$TempOutput`" $Params `"$OriginalFile`""
-                        
                         $process = New-Object System.Diagnostics.Process
                         $process.StartInfo.FileName = $MozJpegPath
                         $process.StartInfo.Arguments = "-outfile `"$TempOutput`" $Params `"$OriginalFile`""

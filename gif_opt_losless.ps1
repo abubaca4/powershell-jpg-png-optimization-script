@@ -167,10 +167,6 @@ function Optimize-File {
         
         $OriginalSize = $File.Length
         
-        # Run gifsicle using Start-Process (правильный способ)
-        $GifsicleArgs = "-i `"$OriginalFile`" -O3 -j$ProcessorCores -o `"$OutputFile`""
-        
-        # Способ 1: Используем Start-Process с явным указанием пути
         $ProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
         $ProcessInfo.FileName = $GifsiclePath
         $ProcessInfo.Arguments = "-i `"$OriginalFile`" -O3 -j$ProcessorCores -o `"$OutputFile`""
@@ -189,7 +185,6 @@ function Optimize-File {
             $NewSize = (Get-Item $OutputFile).Length
             
             # Validate that files are identical using gifdiff
-            # Аналогично используем Process для gifdiff
             $DiffProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
             $DiffProcessInfo.FileName = $GifdiffPath
             $DiffProcessInfo.Arguments = "`"$OriginalFile`" `"$OutputFile`""
@@ -244,7 +239,6 @@ function Optimize-File {
         return $null
     }
     finally {
-        # Убедимся, что процессы закрыты
         if ($Process -ne $null) {
             $Process.Dispose()
         }

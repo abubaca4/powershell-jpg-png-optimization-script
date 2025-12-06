@@ -26,3 +26,5 @@ gif_opt_losless.ps1 gifsicle with -O3 -j<core> and result check with gifdiff
 png_opt.ps1 and png_opt_slow.ps1 always multithreaded since multithreading is built into oxipng
 
 jpg_opt.ps1 and jpg_opt_losless.ps1 multithread if ps version 7+
+
+png_opt_not_safe.ps1 and png_opt_slow_not_safe.ps1 make png files that can not open in some apps and break transparency in some apps. But result size is litle less.

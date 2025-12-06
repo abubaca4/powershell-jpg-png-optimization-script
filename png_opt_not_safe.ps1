@@ -147,7 +147,7 @@ function Optimize-File {
         $OriginalSize = $File.Length
         
         # Directly call oxipng using &
-        & $OxipngPath -o max --strip safe -q --out $OutputFile $OriginalFile
+        & $OxipngPath -o max --strip all --alpha -q --out $OutputFile $OriginalFile
         
         if ($LASTEXITCODE -eq 0 -and (Test-Path $OutputFile)) { 
             $NewSize = (Get-Item $OutputFile).Length

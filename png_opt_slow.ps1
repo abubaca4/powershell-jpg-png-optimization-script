@@ -123,7 +123,7 @@ $Files = Get-ChildItem -Path $InputPath -Include *.png, *.apng -Recurse -File
 
 # Function to process a single file
 function Optimize-File {
-    param($File, $OxipngPath, $OutputPath, $InputPath, $ConfirmReplace)
+    param($File, $OxipngPath, $OutputPath, $ConfirmReplace)
     
     $StartTime = Get-Date
     $OriginalFile = $File.FullName
@@ -146,11 +146,8 @@ function Optimize-File {
         
         $OriginalSize = $File.Length
         
-        # Build oxipng command arguments
-        $Arguments = "-o max --strip safe -Z --fast -q --out `"$OutputFile`" `"$OriginalFile`""
-        
         # Directly call oxipng using &
-        & $OxipngPath -o max --strip safe -q --out $OutputFile $OriginalFile
+        & $OxipngPath -o max --strip safe -Z -q --out $OutputFile $OriginalFile
         
         if ($LASTEXITCODE -eq 0 -and (Test-Path $OutputFile)) { 
             $NewSize = (Get-Item $OutputFile).Length
@@ -186,7 +183,7 @@ function Optimize-File {
 
 # Process files sequentially
 $Results = $Files | ForEach-Object {
-    Optimize-File -File $_ -OxipngPath $OxipngPath -OutputPath $OutputPath -InputPath $InputPath -ConfirmReplace $ConfirmReplace
+    Optimize-File -File $_ -OxipngPath $OxipngPath -OutputPath $OutputPath -ConfirmReplace $ConfirmReplace
 }
 
 Write-Host (Get-LocalizedMessage "End" (Get-Date))
