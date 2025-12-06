@@ -1,9 +1,9 @@
-# powershell-jpg-png-optimization-script
+# powershell-img-optimization-script
 Using oxipng and mozjpeg
 
-Place oxipng.exe in oxipng dir and cjpeg-static.exe, jpegtran-static.exe in mozjpeg dir
+Place oxipng.exe in oxipng dir, cjpeg-static.exe, jpegtran-static.exe in mozjpeg dir and gifdiff.exe, gifsicle.exe in gifsicle dir
 
-Download exe from https://github.com/garyzyg/mozjpeg-windows/releases and https://github.com/oxipng/oxipng/releases
+Download exe from https://github.com/garyzyg/mozjpeg-windows/releases https://github.com/oxipng/oxipng/releases and https://eternallybored.org/misc/gifsicle/
 
 Using
 
@@ -20,6 +20,8 @@ jpg_opt_losless.ps1 use jpegtran to losless jpg optimization
 png_opt.ps1 oxipng optimization
 
 png_opt_slow.ps1 oxipng optimization with Zopfli(x100 slower, 2-8% better)
+
+gif_opt_losless.ps1 gifsicle with -O3 -j<core> and result check with gifdiff
 
 png_opt.ps1 and png_opt_slow.ps1 always multithreaded since multithreading is built into oxipng
 
