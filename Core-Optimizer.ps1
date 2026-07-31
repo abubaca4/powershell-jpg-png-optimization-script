@@ -8,10 +8,11 @@ param(
     [string]$ValidatorPath,
     [string]$ValidatorArgs,
     [int]$ThrottleLimit = 0,
-    [switch]$AsciiTempMode
+    [switch]$AsciiTempMode,
+    [switch]$VerboseOutput
 )
 
-# --- 1. Localization ---
+# --- 1. Localization & Formatting ---
 $SystemLanguage = (Get-Culture).TwoLetterISOLanguageName
 $Messages = @{
     "Start" = @{ "ru" = "НАЧАЛО: {0}"; "en" = "START: {0}" }
@@ -26,14 +27,37 @@ $Messages = @{
     "ReplacePrompt" = @{ "ru" = "Заменить оригинальные файлы? (Y/N)"; "en" = "Replace original files? (Y/N)" }
     "DoneReplaced" = @{ "ru" = "Готово. Оригиналы заменены."; "en" = "Done. Originals replaced." }
     "DoneSaved" = @{ "ru" = "Готово. Сохранено в {0}"; "en" = "Done. Saved to {0}" }
+    "FilesProcessed" = @{ "ru" = "Файлов обработано: {0}/{1}"; "en" = "Files processed: {0}/{1}" }
+    "InputSize" = @{ "ru" = "Входной размер: {0}"; "en" = "Input size: {0}" }
+    "OutputSize" = @{ "ru" = "Выходной размер: {0}"; "en" = "Output size: {0}" }
+    "TotalSaved" = @{ "ru" = "Всего сохранено: {0} ({1}%)"; "en" = "Total saved: {0} ({1}%)" }
+    "Unoptimized" = @{ "ru" = "({0} файлов не может быть оптимизировано)"; "en" = "({0} files could not be optimized further)" }
 }
 
 function Get-Msg {
     param($Key, $FmtArgs)
     $t = $Messages[$Key][$SystemLanguage]
     if (-not $t) { $t = $Messages[$Key]["en"] }
-    if ($FmtArgs) { return $t -f $FmtArgs }
+    if ($null -ne $FmtArgs) { return $t -f $FmtArgs }
     return $t
+}
+
+function Format-Size {
+    param([long]$Bytes, [switch]$Short)
+    if ($Bytes -eq 0) { return if ($Short) { "0 bytes" } else { "0 bytes (0 bytes)" } }
+
+    $Unit = "bytes"
+    $Val = $Bytes
+
+    if ($Bytes -ge 1GB) { $Val = [math]::Round($Bytes / 1GB, 2); $Unit = "GiB" }
+    elseif ($Bytes -ge 1MB) { $Val = [math]::Round($Bytes / 1MB, 2); $Unit = "MiB" }
+    elseif ($Bytes -ge 1KB) { $Val = [math]::Round($Bytes / 1KB, 2); $Unit = "KiB" }
+
+    if ($Short -or $Unit -eq "bytes") {
+        return "$Val $Unit"
+    } else {
+        return "$Val $Unit ($Bytes bytes)"
+    }
 }
 
 # --- 2. Input validation ---
@@ -52,10 +76,20 @@ if (-not (Test-Path -LiteralPath $ToolPath)) { Write-Error "Tool not found: $Too
 
 # --- 3. Collecting files ---
 Write-Host (Get-Msg "Start" (Get-Date))
-Write-Host (Get-Msg "SizeHeader")
-Write-Host (Get-Msg "SizeRowHeader")
 
 $Files = Get-ChildItem -LiteralPath $InputPath -Include $Extensions -Recurse -File
+$TotalFiles = $Files.Count
+
+if ($TotalFiles -eq 0) {
+    Write-Host (Get-Msg "NoFilesCompressed")
+    Write-Host (Get-Msg "End" (Get-Date))
+    exit 0
+}
+
+if ($VerboseOutput) {
+    Write-Host (Get-Msg "SizeHeader")
+    Write-Host (Get-Msg "SizeRowHeader")
+}
 
 # --- 4. Parallel processing ---
 if ($ThrottleLimit -le 0) {
@@ -63,7 +97,6 @@ if ($ThrottleLimit -le 0) {
     $ThrottleLimit = if ($ProcessorCores) { [math]::Max(1, $ProcessorCores) } else { 2 }
 }
 
-# Create temporary directory for AsciiTempMode
 $AsciiTempDir = $null
 if ($AsciiTempMode) {
     $AsciiTempDir = Join-Path $env:TEMP "imgopt_ascii_temp"
@@ -71,6 +104,8 @@ if ($AsciiTempMode) {
         New-Item -ItemType Directory -Path $AsciiTempDir -Force | Out-Null
     }
 }
+
+$Script:ProcessedCount = 0
 
 $Results = $Files | ForEach-Object -Parallel {
     $File = $_
@@ -85,7 +120,6 @@ $Results = $Files | ForEach-Object -Parallel {
     $AsciiTempMode = $using:AsciiTempMode
     $AsciiTempDir = $using:AsciiTempDir
 
-    # Replicate localization function inside the thread
     $Messages = $using:Messages
     $Lang = $using:SystemLanguage
     function Get-MsgPar {
@@ -98,7 +132,6 @@ $Results = $Files | ForEach-Object -Parallel {
 
     function Run-ProcessSafe {
         param($Exe, $Arguments)
-
         $pInfo = New-Object System.Diagnostics.ProcessStartInfo
         $pInfo.FileName = $Exe
         $pInfo.Arguments = $Arguments
@@ -109,7 +142,6 @@ $Results = $Files | ForEach-Object -Parallel {
 
         $p = New-Object System.Diagnostics.Process
         $p.StartInfo = $pInfo
-
         try {
             $p.Start() | Out-Null
             $stdOutTask = $p.StandardOutput.ReadToEndAsync()
@@ -118,8 +150,7 @@ $Results = $Files | ForEach-Object -Parallel {
             $null = $stdOutTask.Result
             $null = $stdErrTask.Result
             return $p.ExitCode
-        }
-        finally {
+        } finally {
             if ($p) { $p.Dispose() }
         }
     }
@@ -127,7 +158,6 @@ $Results = $Files | ForEach-Object -Parallel {
     $StartTime = Get-Date
     $OriginalSize = $File.Length
 
-    # Paths
     $NewName = $File.Name
     if ($OutExt) { $NewName = $File.BaseName + $OutExt }
 
@@ -143,8 +173,6 @@ $Results = $Files | ForEach-Object -Parallel {
     $BestTempFile = $null
     $BestSize = $OriginalSize + 1
     $BestParams = ""
-
-    # Handle AsciiTempMode
     $AsciiTempInputFile = $null
     $SourceFile = $File.FullName
 
@@ -153,7 +181,6 @@ $Results = $Files | ForEach-Object -Parallel {
             $tempFileName = [System.IO.Path]::GetRandomFileName()
             $ext = $File.Extension
             $AsciiTempInputFile = Join-Path $AsciiTempDir ($tempFileName + $ext)
-
             Copy-Item -LiteralPath $File.FullName -Destination $AsciiTempInputFile -Force
             $SourceFile = $AsciiTempInputFile
         }
@@ -166,7 +193,6 @@ $Results = $Files | ForEach-Object -Parallel {
                 if ($OutExt) { $TempFile += $OutExt }
                 $CurrentArgs = $ArgsTemplate.Replace("{src}", "`"$SourceFile`"").Replace("{dest}", "`"$TempFile`"")
             } else {
-                # Поддержка утилит с обработкой "на месте" (например ECT)
                 $tempFileName = [System.IO.Path]::GetRandomFileName() + $File.Extension
                 $tempDirToUse = if ($AsciiTempDir) { $AsciiTempDir } else { [System.IO.Path]::GetTempPath() }
                 $TempFile = Join-Path $tempDirToUse $tempFileName
@@ -178,7 +204,6 @@ $Results = $Files | ForEach-Object -Parallel {
 
             if ($ExitCode -eq 0 -and (Test-Path -LiteralPath $TempFile) -and (Get-Item -LiteralPath $TempFile).Length -gt 0) {
                 $CurSize = (Get-Item -LiteralPath $TempFile).Length
-
                 $ValidationPassed = $true
                 if ($ValPath) {
                     $vArgs = $ValArgs.Replace("{src}", "`"$SourceFile`"").Replace("{dest}", "`"$TempFile`"")
@@ -207,17 +232,19 @@ $Results = $Files | ForEach-Object -Parallel {
 
             $Percent = [math]::Round(($BestSize / $OriginalSize) * 100, 2)
             $ParamInfo = if ($ArgSets.Count -gt 1) { " [Params: $BestParams]" } else { "" }
-            Write-Host "$OriginalSize`t$BestSize`t$Percent`t`t$($File.Name) ($TimeSpent)$ParamInfo"
-            return @{ Original = $File.FullName; Optimized = $FinalOutputFile; Success = $true }
+            $OutStr = "$OriginalSize`t$BestSize`t$Percent`t`t$($File.Name) ($TimeSpent)$ParamInfo"
+            
+            return @{ Original = $File.FullName; Optimized = $FinalOutputFile; Success = $true; OriginalSize = $OriginalSize; OptimizedSize = $BestSize; OutputStr = $OutStr }
         } else {
             if ($BestTempFile) { Remove-Item -LiteralPath $BestTempFile -ErrorAction SilentlyContinue }
-            Write-Host "$OriginalSize`t----`t$(Get-MsgPar 'NotCompressed')`t`t$($File.Name)"
-            return $null
+            $OutStr = "$OriginalSize`t----`t$(Get-MsgPar 'NotCompressed')`t`t$($File.Name)"
+            
+            return @{ Original = $File.FullName; Success = $false; OriginalSize = $OriginalSize; OptimizedSize = $OriginalSize; OutputStr = $OutStr }
         }
     }
     catch {
-        Write-Host "$OriginalSize`t----`t$(Get-MsgPar 'ErrorProcessing')`t`t$($File.Name) ($($_.Exception.Message))"
-        return $null
+        $OutStr = "$OriginalSize`t----`t$(Get-MsgPar 'ErrorProcessing')`t`t$($File.Name) ($($_.Exception.Message))"
+        return @{ Original = $File.FullName; Success = $false; OriginalSize = $OriginalSize; OptimizedSize = $OriginalSize; OutputStr = $OutStr }
     }
     finally {
         if ($AsciiTempMode -and $AsciiTempInputFile -and (Test-Path -LiteralPath $AsciiTempInputFile)) {
@@ -225,11 +252,47 @@ $Results = $Files | ForEach-Object -Parallel {
         }
     }
 
-} -ThrottleLimit $ThrottleLimit
+} -ThrottleLimit $ThrottleLimit | ForEach-Object {
+    $Script:ProcessedCount++
+    if (-not $VerboseOutput) {
+        $msg = Get-Msg "FilesProcessed" @($Script:ProcessedCount, $TotalFiles)
+        Write-Host "`r$msg    " -NoNewline
+    } else {
+        if ($_.OutputStr) { Write-Host $_.OutputStr }
+    }
+    $_ # Прокидываем объект дальше в массив $Results
+}
+
+# --- 5. Summary & Replacement ---
+if (-not $VerboseOutput) {
+    Write-Host "" # Закрываем строку после "\r"
+} else {
+    Write-Host (Get-Msg "FilesProcessed" @($TotalFiles, $TotalFiles))
+}
+
+$TotalInput = 0
+$TotalOutput = 0
+$Unoptimized = 0
+
+foreach ($R in $Results) {
+    $TotalInput += $R.OriginalSize
+    $TotalOutput += $R.OptimizedSize
+    if (-not $R.Success) { $Unoptimized++ }
+}
+
+$Saved = $TotalInput - $TotalOutput
+$SavedPercent = if ($TotalInput -gt 0) { [math]::Round(($Saved / $TotalInput) * 100, 2) } else { 0 }
+
+Write-Host (Get-Msg "InputSize" (Format-Size $TotalInput))
+Write-Host (Get-Msg "OutputSize" (Format-Size $TotalOutput))
+Write-Host (Get-Msg "TotalSaved" @((Format-Size $Saved -Short), $SavedPercent))
+
+if ($Unoptimized -gt 0) {
+    Write-Host (Get-Msg "Unoptimized" $Unoptimized)
+}
 
 Write-Host (Get-Msg "End" (Get-Date))
 
-# --- 5. Replacement ---
 if ($ConfirmReplace -and $Results) {
     $SuccessfulResults = $Results | Where-Object { $_ -and $_.Success }
 

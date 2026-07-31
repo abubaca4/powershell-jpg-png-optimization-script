@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory=$true, Position=0)][string]$InputPath, 
     [Parameter(Position=1)][string]$OutputPath, 
     [int]$j, 
-    [switch]$AsciiTempMode
+    [switch]$AsciiTempMode,
+    [switch]$VerboseOutput
 )
 
 $ScriptDir = $PSScriptRoot
@@ -20,4 +21,5 @@ $ValTemplate = "{src} {dest}"
               -ValidatorPath $ValTool `
               -ValidatorArgs $ValTemplate `
               -ThrottleLimit $j `
-              -AsciiTempMode:$AsciiTempMode
+              -AsciiTempMode:$AsciiTempMode `
+              -VerboseOutput:$VerboseOutput

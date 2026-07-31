@@ -48,12 +48,26 @@ Run the scripts via PowerShell 7 (`pwsh`). You can specify an output directory o
 * `-OutputPath`: (Optional) Where to save optimized files. If omitted, it prompts to replace originals.
 * `-j`: (Optional) Number of parallel threads. Defaults to the number of CPU cores.
 * `-AsciiTempMode`: (Optional) A compatibility switch. If enabled, files are copied to a temporary directory with ASCII-only filenames before processing. Use this if the underlying tools (like MozJPEG) struggle with Unicode/Special characters in file paths. Enabled by default in ECT scripts.
+* `-VerboseOutput`: (Optional) Enables detailed legacy console output, printing individual file compression stats (original size, compressed size, percentage, processing time) as each file completes.
 
 **Example:**
 
 ```powershell
 .\jpg_opt.ps1 "C:\Photos\Input" -j 4 -AsciiTempMode
 ```
+
+## 📊 Output & Logging
+
+By default, the optimization process uses a compact output mode inspired by oxipng:
+
+* **Real-time Progress Counter**: A dynamic counter (`Files processed: X/Y`) updates in place on a single console line during execution.
+* **Overall Summary**: Upon completion, an aggregate summary is printed containing:
+  * Total **Input size** and **Output size**.
+  * **Total saved** bytes and percentage savings.
+  * Number of files that could not be optimized further.
+* **Adaptive Unit Display**: File sizes are automatically formatted into human-readable units (`KiB`, `MiB`, `GiB`) depending on the total volume processed.
+
+If you need to inspect individual file results during processing, pass the `-VerboseOutput` parameter to restore detailed per-file logging.
 
 ## 📜 Script Descriptions
 
