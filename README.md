@@ -11,6 +11,7 @@ To use these scripts, you must download the required binaries and place them in 
 1. **MozJPEG:** [Download from GitHub](https://github.com/garyzyg/mozjpeg-windows/releases)
 2. **oxipng:** [Download from GitHub](https://github.com/oxipng/oxipng/releases)
 3. **Gifsicle:** [Download from eternallybored.org](https://eternallybored.org/misc/gifsicle/)
+4. **ECT (Efficient Compression Tool):** [Download from GitHub](https://github.com/fhanau/Efficient-Compression-Tool/releases)
 
 **Required Directory Structure:**
 
@@ -24,6 +25,8 @@ To use these scripts, you must download the required binaries and place them in 
 │   ├── gifsicle/
 │   │   ├── gifsicle.exe
 │   │   └── gifdiff.exe
+│   ├── ect/
+│   │   └── ect.exe
 │   ├── jpg_opt.ps1
 │   ├── png_opt.ps1
 │   └── ... (other scripts)
@@ -44,7 +47,7 @@ Run the scripts via PowerShell 7 (`pwsh`). You can specify an output directory o
 * `-InputPath`: The folder containing images to optimize (Recursive).
 * `-OutputPath`: (Optional) Where to save optimized files. If omitted, it prompts to replace originals.
 * `-j`: (Optional) Number of parallel threads. Defaults to the number of CPU cores.
-* `-AsciiTempMode`: (Optional) A compatibility switch. If enabled, files are copied to a temporary directory with ASCII-only filenames before processing. Use this if the underlying tools (like MozJPEG) struggle with Unicode/Special characters in file paths.
+* `-AsciiTempMode`: (Optional) A compatibility switch. If enabled, files are copied to a temporary directory with ASCII-only filenames before processing. Use this if the underlying tools (like MozJPEG) struggle with Unicode/Special characters in file paths. Enabled by default in ECT scripts.
 
 **Example:**
 
@@ -64,6 +67,10 @@ All scripts utilize parallel processing via `Core-Optimizer.ps1`.
 | **`png_opt_slow.ps1`** | PNG, APNG | **Max Compression.** Uses `oxipng` with the **Zopfli** algorithm. Much slower, but produces the smallest possible PNGs. |
 | **`png_opt_not_safe.ps1`** | PNG, APNG | **Aggressive.** Removes all metadata/chunks and uses aggressive alpha handling. |
 | **`png_opt_slow_not_safe.ps1`** | PNG, APNG | **Ultra Aggressive.** Combines Zopfli compression with "not safe" metadata/alpha stripping. |
+| **`ect_png_strict.ps1`** | PNG, APNG | **ECT Strict Lossless.** Uses ECT (`-9 --reuse`). Keeps original PNG filter and colortype intact. Works faster than `png_opt_slow.ps1`, with compression efficiency varying depending on the file (sometimes better, sometimes worse). |
+| **`ect_png_opt.ps1`** | PNG, APNG | **ECT Full Optimization.** Uses ECT (`-9`). Allows modification of filter and colortype. Typically yields better compression ratios than `png_opt_slow.ps1`, but color type and internal structure may be altered. |
+| **`ect_zip_opt.ps1`** | ZIP | **ZIP Archive.** Uses ECT (`-9 -zip --disable-png --disable-jpg`) to optimize ZIP archives without processing internal media files. |
+| **`ect_gzip_opt.ps1`** | GZ, GZIP, TGZ, SVGZ | **GZIP Archive.** Uses ECT (`-9 -gzip --disable-png --disable-jpg`) to optimize GZIP-compressed files. |
 | **`gif_opt_losless.ps1`** | GIF | **Lossless.** Uses `gifsicle` (O3) and verifies integrity using `gifdiff` to ensure frames remain identical. |
 
 ## ⚠️ Important Notes

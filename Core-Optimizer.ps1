@@ -159,10 +159,21 @@ $Results = $Files | ForEach-Object -Parallel {
         }
 
         foreach ($ArgsTemplate in $ArgSets) {
-            $TempFile = [System.IO.Path]::GetTempFileName()
-            if ($OutExt) { $TempFile += $OutExt }
+            $HasDest = $ArgsTemplate.Contains("{dest}")
 
-            $CurrentArgs = $ArgsTemplate.Replace("{src}", "`"$SourceFile`"").Replace("{dest}", "`"$TempFile`"")
+            if ($HasDest) {
+                $TempFile = [System.IO.Path]::GetTempFileName()
+                if ($OutExt) { $TempFile += $OutExt }
+                $CurrentArgs = $ArgsTemplate.Replace("{src}", "`"$SourceFile`"").Replace("{dest}", "`"$TempFile`"")
+            } else {
+                # Поддержка утилит с обработкой "на месте" (например ECT)
+                $tempFileName = [System.IO.Path]::GetRandomFileName() + $File.Extension
+                $tempDirToUse = if ($AsciiTempDir) { $AsciiTempDir } else { [System.IO.Path]::GetTempPath() }
+                $TempFile = Join-Path $tempDirToUse $tempFileName
+                Copy-Item -LiteralPath $SourceFile -Destination $TempFile -Force
+                $CurrentArgs = $ArgsTemplate.Replace("{src}", "`"$TempFile`"")
+            }
+
             $ExitCode = Run-ProcessSafe -Exe $ToolPath -Arguments $CurrentArgs
 
             if ($ExitCode -eq 0 -and (Test-Path -LiteralPath $TempFile) -and (Get-Item -LiteralPath $TempFile).Length -gt 0) {
