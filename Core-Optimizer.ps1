@@ -109,7 +109,9 @@ if ($ThrottleLimit -le 0) {
 
 $AsciiTempDir = $null
 if ($AsciiTempMode) {
-    $AsciiTempDir = Join-Path $env:TEMP "imgopt_ascii_temp"
+    $RandomSuffix = [System.IO.Path]::GetRandomFileName()
+    $AsciiTempDir = Join-Path $env:TEMP ("imgopt_ascii_temp_" + $RandomSuffix)
+
     if (-not (Test-Path -LiteralPath $AsciiTempDir)) {
         New-Item -ItemType Directory -Path $AsciiTempDir -Force | Out-Null
     }
