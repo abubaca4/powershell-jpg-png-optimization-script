@@ -49,6 +49,7 @@ Run the scripts via PowerShell 7 (`pwsh`). You can specify an output directory o
 * `-j`: (Optional) Number of parallel threads. Defaults to the number of CPU cores.
 * `-AsciiTempMode`: (Optional) A compatibility switch. If enabled, files are copied to a temporary directory with ASCII-only filenames before processing. Use this if the underlying tools (like MozJPEG) struggle with Unicode/Special characters in file paths. Enabled by default in ECT scripts.
 * `-VerboseOutput`: (Optional) Enables detailed legacy console output, printing individual file compression stats (original size, compressed size, percentage, processing time) as each file completes.
+* `-InPlace`: (Optional) Replaces the original files immediately during the optimization process without asking for confirmation at the end. Ignored if `-OutputPath` is specified.
 
 **Example:**
 

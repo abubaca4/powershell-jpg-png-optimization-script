@@ -9,7 +9,8 @@ param(
     [string]$ValidatorArgs,
     [int]$ThrottleLimit = 0,
     [switch]$AsciiTempMode,
-    [switch]$VerboseOutput
+    [switch]$VerboseOutput,
+    [switch]$InPlace
 )
 
 # --- 1. Localization & Formatting ---
@@ -27,11 +28,12 @@ $Messages = @{
     "ReplacePrompt" = @{ "ru" = "Заменить оригинальные файлы? (Y/N)"; "en" = "Replace original files? (Y/N)" }
     "DoneReplaced" = @{ "ru" = "Готово. Оригиналы заменены."; "en" = "Done. Originals replaced." }
     "DoneSaved" = @{ "ru" = "Готово. Сохранено в {0}"; "en" = "Done. Saved to {0}" }
+    "DoneInPlace" = @{ "ru" = "Готово. Файлы успешно заменены на месте."; "en" = "Done. Files replaced in-place." }
     "FilesProcessed" = @{ "ru" = "Файлов обработано: {0}/{1}"; "en" = "Files processed: {0}/{1}" }
     "InputSize" = @{ "ru" = "Входной размер: {0}"; "en" = "Input size: {0}" }
     "OutputSize" = @{ "ru" = "Выходной размер: {0}"; "en" = "Output size: {0}" }
     "TotalSaved" = @{ "ru" = "Всего сохранено: {0} ({1}%)"; "en" = "Total saved: {0} ({1}%)" }
-    "Unoptimized" = @{ "ru" = "({0} файлов не может быть оптимизировано)"; "en" = "({0} files could not be optimized further)" }
+    "Unoptimized" = @{ "ru" = "({0} файлов не могут быть оптимизированы)"; "en" = "({0} files could not be optimized further)" }
 }
 
 function Get-Msg {
@@ -66,10 +68,18 @@ if (-not (Test-Path -LiteralPath $InputPath)) { Write-Error "Input Path not foun
 
 if (-not $OutputPath) {
     $OutputPath = $InputPath
-    $ConfirmReplace = $true
+    if ($InPlace) {
+        $ConfirmReplace = $false
+        $ImmediateReplace = $true
+    } else {
+        $ConfirmReplace = $true
+        $ImmediateReplace = $false
+    }
 } else {
     if (-not (Test-Path -LiteralPath $OutputPath)) { New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null }
+    # Игнорируем флаг InPlace, так как указана выходная папка
     $ConfirmReplace = $false
+    $ImmediateReplace = $false
 }
 
 if (-not (Test-Path -LiteralPath $ToolPath)) { Write-Error "Tool not found: $ToolPath"; exit 1 }
@@ -114,6 +124,7 @@ $Results = $Files | ForEach-Object -Parallel {
     $OutDirRoot = $using:OutputPath
     $InDirRoot = $using:InputPath
     $ReplaceMode = $using:ConfirmReplace
+    $ImmediateReplace = $using:ImmediateReplace
     $OutExt = $using:OutputExtension
     $ValPath = $using:ValidatorPath
     $ValArgs = $using:ValidatorArgs
@@ -163,6 +174,8 @@ $Results = $Files | ForEach-Object -Parallel {
 
     if ($ReplaceMode) {
         $FinalOutputFile = Join-Path $File.DirectoryName ($File.BaseName + ".opti" + [System.IO.Path]::GetExtension($NewName))
+    } elseif ($ImmediateReplace) {
+        $FinalOutputFile = Join-Path $File.DirectoryName $NewName
     } else {
         $RelPath = $File.DirectoryName.Substring($InDirRoot.Length).TrimStart('\', '/')
         $TargetDir = Join-Path $OutDirRoot $RelPath
@@ -227,18 +240,27 @@ $Results = $Files | ForEach-Object -Parallel {
         $TimeSpent = [math]::Round(((Get-Date) - $StartTime).TotalSeconds, 2)
 
         if ($BestTempFile -and $BestSize -lt $OriginalSize) {
-            Copy-Item -LiteralPath $BestTempFile -Destination $FinalOutputFile -Force
-            Remove-Item -LiteralPath $BestTempFile -ErrorAction SilentlyContinue
+
+            if ($ImmediateReplace) {
+                # Если расширение изменилось, удаляем старый файл
+                if ($File.FullName -ne $FinalOutputFile -and (Test-Path -LiteralPath $File.FullName)) {
+                    Remove-Item -LiteralPath $File.FullName -Force -ErrorAction SilentlyContinue
+                }
+                Move-Item -LiteralPath $BestTempFile -Destination $FinalOutputFile -Force
+            } else {
+                Copy-Item -LiteralPath $BestTempFile -Destination $FinalOutputFile -Force
+                Remove-Item -LiteralPath $BestTempFile -ErrorAction SilentlyContinue
+            }
 
             $Percent = [math]::Round(($BestSize / $OriginalSize) * 100, 2)
             $ParamInfo = if ($ArgSets.Count -gt 1) { " [Params: $BestParams]" } else { "" }
             $OutStr = "$OriginalSize`t$BestSize`t$Percent`t`t$($File.Name) ($TimeSpent)$ParamInfo"
-            
+
             return @{ Original = $File.FullName; Optimized = $FinalOutputFile; Success = $true; OriginalSize = $OriginalSize; OptimizedSize = $BestSize; OutputStr = $OutStr }
         } else {
             if ($BestTempFile) { Remove-Item -LiteralPath $BestTempFile -ErrorAction SilentlyContinue }
             $OutStr = "$OriginalSize`t----`t$(Get-MsgPar 'NotCompressed')`t`t$($File.Name)"
-            
+
             return @{ Original = $File.FullName; Success = $false; OriginalSize = $OriginalSize; OptimizedSize = $OriginalSize; OutputStr = $OutStr }
         }
     }
@@ -322,6 +344,8 @@ if ($ConfirmReplace -and $Results) {
     } else {
         Write-Host (Get-Msg "NoFilesCompressed")
     }
+} elseif ($ImmediateReplace) {
+    Write-Host (Get-Msg "DoneInPlace")
 } else {
     Write-Host (Get-Msg "DoneSaved" $OutputPath)
 }

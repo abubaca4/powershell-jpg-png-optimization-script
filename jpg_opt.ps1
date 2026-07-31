@@ -3,7 +3,8 @@ param(
     [Parameter(Position=1)][string]$OutputPath, 
     [int]$j, 
     [switch]$AsciiTempMode,
-    [switch]$VerboseOutput
+    [switch]$VerboseOutput,
+    [switch]$InPlace
 )
 
 $ScriptDir = $PSScriptRoot
@@ -43,4 +44,5 @@ $Exts = @("*.png", "*.ppm", "*.pnm", "*.pgm", "*.pbm", "*.bmp", "*.dib", "*.tga"
               -OutputExtension ".jpg" `
               -ThrottleLimit $j `
               -AsciiTempMode:$AsciiTempMode `
-              -VerboseOutput:$VerboseOutput
+              -VerboseOutput:$VerboseOutput `
+              -InPlace:$InPlace

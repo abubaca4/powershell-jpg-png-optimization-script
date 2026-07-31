@@ -3,7 +3,8 @@ param(
     [Parameter(Position=1)][string]$OutputPath,
     [int]$j,
     [switch]$AsciiTempMode = $true,
-    [switch]$VerboseOutput
+    [switch]$VerboseOutput,
+    [switch]$InPlace
 )
 
 $ScriptDir = $PSScriptRoot
@@ -18,4 +19,5 @@ $ArgsTemplate = "-9 -quiet {src}"
               -Extensions @("*.png", "*.apng") `
               -ThrottleLimit $j `
               -AsciiTempMode:$AsciiTempMode `
-              -VerboseOutput:$VerboseOutput
+              -VerboseOutput:$VerboseOutput `
+              -InPlace:$InPlace
