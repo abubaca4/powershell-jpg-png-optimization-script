@@ -46,7 +46,7 @@ function Get-Msg {
 
 function Format-Size {
     param([long]$Bytes, [switch]$Short)
-    if ($Bytes -eq 0) { return if ($Short) { "0 bytes" } else { "0 bytes (0 bytes)" } }
+    if ($Bytes -eq 0) { return $Short ? "0 bytes" : "0 bytes (0 bytes)" }
 
     $Unit = "bytes"
     $Val = $Bytes
